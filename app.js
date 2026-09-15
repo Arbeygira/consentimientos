@@ -23,7 +23,7 @@ let currentUser = null;
 let permissions = {};
 
 function getInternalEmail(username) {
-  return `${username.trim().toLowerCase()}@cuenta.interna.local`;
+  return `${username.trim().toLowerCase()}@usuarios.consentimiento.app`;
 }
 
 function isValidBaseUsername(username) {
@@ -1198,6 +1198,19 @@ createUserForm.addEventListener('submit', async (event) => {
     userManagementMessage.textContent = 'El administrador debe registrarse con un correo válido.';
     return;
   }
+  if (!isAdmin) {
+    const { data, error } = await supabaseClient.functions.invoke('create-base-user', {
+      body: { username: identifier, password: newUserPassword.value, role_id: newUserRole.value }
+    });
+    if (error || data?.error) {
+      userManagementMessage.textContent = data?.error || error?.message || 'No se pudo crear el usuario base.';
+      return;
+    }
+    createUserForm.reset();
+    userManagementMessage.textContent = 'Usuario base creado correctamente. Puede ingresar con su usuario y clave.';
+    await loadRolesAndUsers();
+    return;
+  }
   const email = isAdmin ? identifier : getInternalEmail(identifier);
   const currentSession = (await supabaseClient.auth.getSession()).data.session;
   const { data, error } = await supabaseClient.auth.signUp({
@@ -1214,6 +1227,13 @@ createUserForm.addEventListener('submit', async (event) => {
     userManagementMessage.textContent = error?.message || 'No se pudo crear el usuario.';
     return;
   }
+  if (currentSession) {
+    const { error: restoreError } = await supabaseClient.auth.setSession(currentSession);
+    if (restoreError) {
+      userManagementMessage.textContent = `El usuario se creó, pero no se pudo conservar la sesión del administrador: ${restoreError.message}`;
+      return;
+    }
+  }
   const { error: profileError } = await supabaseClient.from('app_profiles').upsert({
     id: data.user.id,
     email,
@@ -1222,7 +1242,6 @@ createUserForm.addEventListener('submit', async (event) => {
     role_id: newUserRole.value
   });
   if (profileError) {
-    if (currentSession) await supabaseClient.auth.setSession(currentSession);
     userManagementMessage.textContent = `Usuario creado, pero no se pudo asignar el rol: ${profileError.message}`;
     return;
   }
