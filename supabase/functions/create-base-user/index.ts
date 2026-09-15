@@ -35,14 +35,14 @@ Deno.serve(async (request) => {
 
   const { data: callerProfile } = await adminClient
     .from('app_profiles')
-    .select('role_id')
+    .select('role_id, app_roles(name)')
     .eq('id', caller.id)
     .single();
   const { data: callerPermissions } = await adminClient
     .from('app_role_permissions')
     .select('permission_key, can_edit')
     .eq('role_id', callerProfile?.role_id || '00000000-0000-0000-0000-000000000000');
-  const canManageUsers = (callerPermissions || []).some(
+  const canManageUsers = callerProfile?.app_roles?.name === 'Administrador' || (callerPermissions || []).some(
     (permission: { permission_key: string; can_edit: boolean }) => permission.permission_key === 'users' && permission.can_edit
   );
   if (!canManageUsers) return response({ error: 'No tiene permiso para crear usuarios.' }, 403);
@@ -55,7 +55,7 @@ Deno.serve(async (request) => {
       .select('id, email, username, account_type, role_id, created_at')
       .order('created_at', { ascending: true });
     if (profilesError) return response({ error: profilesError.message }, 400);
-    const { data: authUsers, error: authUsersError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const { data: authUsers, error: authUsersError } = await adminClient.auth.admin.listUsers({ perPage: 1000, page: 1 });
     if (authUsersError) return response({ error: authUsersError.message }, 400);
     const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
     const users = (authUsers.users || []).map((user) => profileById.get(user.id) || {

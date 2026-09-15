@@ -40,6 +40,7 @@ async function getFunctionError(error, data, fallback) {
       console.warn('No se pudo leer el error de la Edge Function', responseError);
     }
   }
+  if (error?.context?.status) return `${error.message || fallback} (HTTP ${error.context.status})`;
   return error?.message || fallback;
 }
 
