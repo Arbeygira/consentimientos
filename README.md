@@ -24,6 +24,14 @@ where email = 'admin@ejemplo.com';
 ```
 
 - Los usuarios nuevos se crean desde **Usuarios y roles**. La política de confirmación de correo de Supabase debe estar configurada según el flujo deseado; si está activa, el usuario deberá confirmar su correo antes de ingresar.
+- El administrador ingresa con su correo real. Los usuarios base ingresan únicamente con su nombre de usuario y clave; internamente se usa una cuenta técnica de Supabase para conservar la seguridad de las políticas, pero no se les solicita ni verifica correo.
+- Para convertir un perfil administrativo existente, ejecute este SQL sustituyendo el correo:
+
+```sql
+update public.app_profiles
+set account_type = 'admin'
+where email = 'admin@ejemplo.com';
+```
 - En **Usuarios y roles** un administrador puede cambiar el rol de un usuario, revocar su acceso, crear o editar roles y definir sus permisos. Al eliminar un rol, primero reasigne los usuarios que lo utilizan.
 - La opción **Revocar acceso** elimina el perfil de la aplicación, por lo que el usuario ya no puede ingresar. La eliminación física de la cuenta de `auth.users` requiere una Edge Function protegida con `service_role` y no debe hacerse desde este frontend.
 

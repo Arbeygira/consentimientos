@@ -20,8 +20,8 @@
         <h1 id="loginTitle">Ingreso a la aplicación</h1>
         <p class="login-subtitle">Consentimiento informado</p>
         <label>
-          Usuario
-          <input type="email" id="loginUser" autocomplete="username" required />
+          Correo de administrador o usuario base
+          <input type="text" id="loginUser" autocomplete="username" required />
         </label>
         <label>
           Clave
@@ -293,8 +293,15 @@
           <h2>Crear usuario y asignar rol</h2>
           <form id="createUserForm" class="user-form">
             <label>
-              Correo del usuario
-              <input type="email" id="newUserEmail" required autocomplete="off" />
+              Tipo de usuario
+              <select id="newUserType" required>
+                <option value="base">Usuario base (usuario y clave)</option>
+                <option value="admin">Administrador (correo)</option>
+              </select>
+            </label>
+            <label>
+              <span id="newUserIdentifierLabel">Usuario base</span>
+              <input type="text" id="newUserIdentifier" required autocomplete="off" />
             </label>
             <label>
               Contraseña temporal

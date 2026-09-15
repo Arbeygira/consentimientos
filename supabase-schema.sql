@@ -37,9 +37,14 @@ create table if not exists public.app_role_permissions (
 create table if not exists public.app_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
+  username text unique,
+  account_type text not null default 'base' check (account_type in ('admin', 'base')),
   role_id uuid references public.app_roles(id),
   created_at timestamptz not null default now()
 );
+
+alter table public.app_profiles add column if not exists username text unique;
+alter table public.app_profiles add column if not exists account_type text not null default 'base';
 
 insert into public.app_roles (name, description)
 values
@@ -126,8 +131,14 @@ declare
   default_role uuid;
 begin
   select id into default_role from public.app_roles where name = 'Diligenciador' limit 1;
-  insert into public.app_profiles (id, email, role_id)
-  values (new.id, new.email, default_role)
+  insert into public.app_profiles (id, email, username, account_type, role_id)
+  values (
+    new.id,
+    new.email,
+    nullif(new.raw_user_meta_data ->> 'username', ''),
+    coalesce(new.raw_user_meta_data ->> 'account_type', 'base'),
+    default_role
+  )
   on conflict (id) do nothing;
   return new;
 end;

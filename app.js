@@ -5,7 +5,9 @@ const loginPassword = document.getElementById('loginPassword');
 const loginError = document.getElementById('loginError');
 const logoutButton = document.getElementById('logoutBtn');
 const createUserForm = document.getElementById('createUserForm');
-const newUserEmail = document.getElementById('newUserEmail');
+const newUserType = document.getElementById('newUserType');
+const newUserIdentifier = document.getElementById('newUserIdentifier');
+const newUserIdentifierLabel = document.getElementById('newUserIdentifierLabel');
 const newUserPassword = document.getElementById('newUserPassword');
 const newUserRole = document.getElementById('newUserRole');
 const usersList = document.getElementById('usersList');
@@ -19,6 +21,14 @@ const cancelRoleEditButton = document.getElementById('cancelRoleEditBtn');
 
 let currentUser = null;
 let permissions = {};
+
+function getInternalEmail(username) {
+  return `${username.trim().toLowerCase()}@cuenta.interna.local`;
+}
+
+function isValidBaseUsername(username) {
+  return /^[a-z0-9._-]{3,40}$/.test(username);
+}
 
 const consentForm = document.getElementById('consentForm');
 const savedDocumentsContainer = document.getElementById('savedDocuments');
@@ -113,8 +123,10 @@ function setAuthenticated(isAuthenticated) {
 
 async function handleLogin(event) {
   event.preventDefault();
+  const identifier = loginUser.value.trim().toLowerCase();
+  const email = identifier.includes('@') ? identifier : getInternalEmail(identifier);
   const { data, error } = await supabaseClient.auth.signInWithPassword({
-    email: loginUser.value.trim().toLowerCase(),
+    email,
     password: loginPassword.value
   });
   if (error || !data.session) {
@@ -1033,11 +1045,12 @@ async function loadRolesAndUsers() {
   newUserRole.innerHTML = (roles || []).map((role) => `<option value="${role.id}">${role.name}</option>`).join('');
   const { data: profiles } = await supabaseClient
     .from('app_profiles')
-    .select('id, email, role_id, app_roles(name)')
+    .select('id, email, username, account_type, role_id, app_roles(name)')
     .order('created_at', { ascending: true });
   usersList.innerHTML = (profiles || []).map((profile) => `
     <div class="saved-item">
-      <strong>${escapeHtml(profile.email)}</strong>
+      <strong>${escapeHtml(profile.account_type === 'base' ? profile.username : profile.email)}</strong>
+      <small>${profile.account_type === 'base' ? 'Usuario base' : 'Administrador'}</small>
       <div class="user-management-row">
         <select data-user-role="${profile.id}">
           ${(roles || []).map((role) => `<option value="${role.id}" ${role.id === profile.role_id ? 'selected' : ''}>${escapeHtml(role.name)}</option>`).join('')}
@@ -1175,9 +1188,27 @@ createUserForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!requirePermission('users', true)) return;
   userManagementMessage.textContent = '';
+  const identifier = newUserIdentifier.value.trim().toLowerCase();
+  const isAdmin = newUserType.value === 'admin';
+  if (!isAdmin && !isValidBaseUsername(identifier)) {
+    userManagementMessage.textContent = 'El usuario base debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.';
+    return;
+  }
+  if (isAdmin && !identifier.includes('@')) {
+    userManagementMessage.textContent = 'El administrador debe registrarse con un correo válido.';
+    return;
+  }
+  const email = isAdmin ? identifier : getInternalEmail(identifier);
+  const currentSession = (await supabaseClient.auth.getSession()).data.session;
   const { data, error } = await supabaseClient.auth.signUp({
-    email: newUserEmail.value.trim().toLowerCase(),
-    password: newUserPassword.value
+    email,
+    password: newUserPassword.value,
+    options: {
+      data: {
+        username: isAdmin ? null : identifier,
+        account_type: isAdmin ? 'admin' : 'base'
+      }
+    }
   });
   if (error || !data.user) {
     userManagementMessage.textContent = error?.message || 'No se pudo crear el usuario.';
@@ -1185,16 +1216,27 @@ createUserForm.addEventListener('submit', async (event) => {
   }
   const { error: profileError } = await supabaseClient.from('app_profiles').upsert({
     id: data.user.id,
-    email: newUserEmail.value.trim().toLowerCase(),
+    email,
+    username: isAdmin ? null : identifier,
+    account_type: isAdmin ? 'admin' : 'base',
     role_id: newUserRole.value
   });
   if (profileError) {
+    if (currentSession) await supabaseClient.auth.setSession(currentSession);
     userManagementMessage.textContent = `Usuario creado, pero no se pudo asignar el rol: ${profileError.message}`;
     return;
   }
+  if (currentSession) await supabaseClient.auth.setSession(currentSession);
   createUserForm.reset();
   userManagementMessage.textContent = 'Usuario creado y rol asignado correctamente.';
   await loadRolesAndUsers();
+});
+
+newUserType.addEventListener('change', () => {
+  const isAdmin = newUserType.value === 'admin';
+  newUserIdentifierLabel.textContent = isAdmin ? 'Correo del administrador' : 'Usuario base';
+  newUserIdentifier.type = isAdmin ? 'email' : 'text';
+  newUserIdentifier.placeholder = isAdmin ? 'admin@ejemplo.com' : 'usuario1';
 });
 
 roleForm.addEventListener('submit', saveRole);
