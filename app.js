@@ -1054,13 +1054,20 @@ logoutButton.addEventListener('click', logout);
 
 async function loadRolesAndUsers() {
   if (!hasPermission('users', true)) return;
-  const { data: roles } = await supabaseClient.from('app_roles').select('id, name').order('name');
+  const { data: roles, error: rolesError } = await supabaseClient.from('app_roles').select('id, name').order('name');
+  if (rolesError) {
+    userManagementMessage.textContent = `No se pudieron cargar los roles: ${rolesError.message}`;
+    return;
+  }
   newUserRole.innerHTML = (roles || []).map((role) => `<option value="${role.id}">${role.name}</option>`).join('');
-  const { data: profiles } = await supabaseClient
-    .from('app_profiles')
-    .select('id, email, username, account_type, role_id, app_roles(name)')
-    .order('created_at', { ascending: true });
-  usersList.innerHTML = (profiles || []).map((profile) => `
+  const { data: userData, error: usersError } = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'list' } });
+  if (usersError || userData?.error) {
+    userManagementMessage.textContent = await getFunctionError(usersError, userData, 'No se pudieron cargar los usuarios.');
+    usersList.innerHTML = '<div class="empty-state">No se pudieron cargar los usuarios.</div>';
+    return;
+  }
+  const profiles = userData?.users || [];
+  usersList.innerHTML = profiles.map((profile) => `
     <div class="saved-item">
       <strong>${escapeHtml(profile.account_type === 'base' ? profile.username : profile.email)}</strong>
       <small>${profile.account_type === 'base' ? 'Usuario base' : 'Administrador'}</small>
@@ -1069,6 +1076,7 @@ async function loadRolesAndUsers() {
           ${(roles || []).map((role) => `<option value="${role.id}" ${role.id === profile.role_id ? 'selected' : ''}>${escapeHtml(role.name)}</option>`).join('')}
         </select>
         <button type="button" class="btn btn-secondary" data-user-action="role" data-user-id="${profile.id}">Guardar rol</button>
+        <button type="button" class="btn btn-secondary" data-user-action="password" data-user-id="${profile.id}">Cambiar clave</button>
         <button type="button" class="btn btn-outline" data-user-action="delete" data-user-id="${profile.id}">${profile.id === currentUser?.id ? 'No revocar' : 'Revocar acceso'}</button>
       </div>
     </div>
@@ -1167,13 +1175,25 @@ async function handleUserAction(event) {
   const userId = button.dataset.userId;
   if (button.dataset.userAction === 'role') {
     const roleId = usersList.querySelector(`[data-user-role="${userId}"]`).value;
-    const { error } = await supabaseClient.from('app_profiles').update({ role_id: roleId }).eq('id', userId);
-    userManagementMessage.textContent = error ? `No se pudo actualizar el rol: ${error.message}` : 'Rol del usuario actualizado.';
+    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'update_role', user_id: userId, role_id: roleId } });
+    userManagementMessage.textContent = result.error || result.data?.error
+      ? await getFunctionError(result.error, result.data, 'No se pudo actualizar el rol.')
+      : 'Rol del usuario actualizado.';
+  }
+  if (button.dataset.userAction === 'password') {
+    const password = window.prompt('Escriba la nueva clave (mínimo 6 caracteres):');
+    if (!password) return;
+    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'reset_password', user_id: userId, password } });
+    userManagementMessage.textContent = result.error || result.data?.error
+      ? await getFunctionError(result.error, result.data, 'No se pudo cambiar la clave.')
+      : 'Clave actualizada correctamente.';
   }
   if (button.dataset.userAction === 'delete' && userId !== currentUser?.id) {
     if (!window.confirm('¿Desea revocar el acceso de este usuario?')) return;
-    const { error } = await supabaseClient.from('app_profiles').delete().eq('id', userId);
-    userManagementMessage.textContent = error ? `No se pudo revocar el acceso: ${error.message}` : 'Acceso del usuario revocado.';
+    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'delete', user_id: userId } });
+    userManagementMessage.textContent = result.error || result.data?.error
+      ? await getFunctionError(result.error, result.data, 'No se pudo revocar el acceso.')
+      : 'Acceso del usuario revocado.';
   }
   await loadRolesAndUsers();
 }

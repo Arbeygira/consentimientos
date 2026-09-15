@@ -47,7 +47,36 @@ Deno.serve(async (request) => {
   );
   if (!canManageUsers) return response({ error: 'No tiene permiso para crear usuarios.' }, 403);
 
-  const { username, password, role_id: roleId } = await request.json();
+  const payload = await request.json();
+  const action = payload.action || 'create';
+  if (action === 'list') {
+    const { data: profiles, error: profilesError } = await adminClient
+      .from('app_profiles')
+      .select('id, email, username, account_type, role_id, created_at')
+      .order('created_at', { ascending: true });
+    if (profilesError) return response({ error: profilesError.message }, 400);
+    return response({ users: profiles || [] });
+  }
+
+  const { username, password, role_id: roleId, user_id: userId } = payload;
+  if (action === 'update_role') {
+    if (!userId || !roleId) return response({ error: 'Faltan el usuario o el rol.' }, 400);
+    const { error } = await adminClient.from('app_profiles').update({ role_id: roleId }).eq('id', userId);
+    return error ? response({ error: error.message }, 400) : response({ ok: true });
+  }
+
+  if (action === 'delete') {
+    if (!userId || userId === caller.id) return response({ error: 'No puede eliminar su propio usuario.' }, 400);
+    const { error } = await adminClient.auth.admin.deleteUser(userId);
+    return error ? response({ error: error.message }, 400) : response({ ok: true });
+  }
+
+  if (action === 'reset_password') {
+    if (!userId || String(password || '').length < 6) return response({ error: 'La clave debe tener al menos 6 caracteres.' }, 400);
+    const { error } = await adminClient.auth.admin.updateUserById(userId, { password: String(password) });
+    return error ? response({ error: error.message }, 400) : response({ ok: true });
+  }
+
   if (!/^[a-z0-9._-]{3,40}$/.test(String(username || ''))) {
     return response({ error: 'El usuario debe tener entre 3 y 40 caracteres válidos.' }, 400);
   }
