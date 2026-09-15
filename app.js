@@ -30,6 +30,19 @@ function isValidBaseUsername(username) {
   return /^[a-z0-9._-]{3,40}$/.test(username);
 }
 
+async function getFunctionError(error, data, fallback) {
+  if (data?.error) return data.error;
+  if (error?.context instanceof Response) {
+    try {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    } catch (responseError) {
+      console.warn('No se pudo leer el error de la Edge Function', responseError);
+    }
+  }
+  return error?.message || fallback;
+}
+
 const consentForm = document.getElementById('consentForm');
 const savedDocumentsContainer = document.getElementById('savedDocuments');
 const documentsCount = document.getElementById('documentsCount');
@@ -1203,7 +1216,7 @@ createUserForm.addEventListener('submit', async (event) => {
       body: { username: identifier, password: newUserPassword.value, role_id: newUserRole.value }
     });
     if (error || data?.error) {
-      userManagementMessage.textContent = data?.error || error?.message || 'No se pudo crear el usuario base.';
+      userManagementMessage.textContent = await getFunctionError(error, data, 'No se pudo crear el usuario base.');
       return;
     }
     createUserForm.reset();

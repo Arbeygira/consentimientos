@@ -14,8 +14,9 @@ function response(body: Record<string, unknown>, status = 200) {
 }
 
 Deno.serve(async (request) => {
-  if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'POST') return response({ error: 'Método no permitido.' }, 405);
+  try {
+    if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+    if (request.method !== 'POST') return response({ error: 'Método no permitido.' }, 405);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -73,5 +74,9 @@ Deno.serve(async (request) => {
     return response({ error: `No se pudo asignar el rol: ${profileError.message}` }, 400);
   }
 
-  return response({ user: { id: created.user.id, username: String(username).toLowerCase() } }, 201);
+    return response({ user: { id: created.user.id, username: String(username).toLowerCase() } }, 201);
+  } catch (error) {
+    console.error('create-base-user error', error);
+    return response({ error: error instanceof Error ? error.message : 'Error interno al crear el usuario.' }, 500);
+  }
 });
