@@ -44,7 +44,9 @@ create table if not exists public.app_profiles (
 );
 
 alter table public.app_profiles add column if not exists username text unique;
-alter table public.app_profiles add column if not exists account_type text not null default 'base';
+alter table public.app_profiles add column if not exists account_type text not null default 'admin';
+alter table public.app_profiles alter column account_type set default 'admin';
+update public.app_profiles set account_type = 'admin' where account_type = 'base';
 
 insert into public.app_roles (name, description)
 values
@@ -136,7 +138,7 @@ begin
     new.id,
     new.email,
     nullif(new.raw_user_meta_data ->> 'username', ''),
-    coalesce(new.raw_user_meta_data ->> 'account_type', 'base'),
+    coalesce(new.raw_user_meta_data ->> 'account_type', 'admin'),
     default_role
   )
   on conflict (id) do nothing;

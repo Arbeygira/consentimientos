@@ -293,15 +293,8 @@
           <h2>Crear usuario y asignar rol</h2>
           <form id="createUserForm" class="user-form">
             <label>
-              Tipo de usuario
-              <select id="newUserType" required>
-                <option value="base">Usuario base (usuario y clave)</option>
-                <option value="admin">Administrador (correo)</option>
-              </select>
-            </label>
-            <label>
-              <span id="newUserIdentifierLabel">Usuario base</span>
-              <input type="text" id="newUserIdentifier" required autocomplete="off" />
+              Correo del usuario administrador
+              <input type="email" id="newUserEmail" required autocomplete="off" />
             </label>
             <label>
               Contraseña temporal

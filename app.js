@@ -5,9 +5,7 @@ const loginPassword = document.getElementById('loginPassword');
 const loginError = document.getElementById('loginError');
 const logoutButton = document.getElementById('logoutBtn');
 const createUserForm = document.getElementById('createUserForm');
-const newUserType = document.getElementById('newUserType');
-const newUserIdentifier = document.getElementById('newUserIdentifier');
-const newUserIdentifierLabel = document.getElementById('newUserIdentifierLabel');
+const newUserEmail = document.getElementById('newUserEmail');
 const newUserPassword = document.getElementById('newUserPassword');
 const newUserRole = document.getElementById('newUserRole');
 const usersList = document.getElementById('usersList');
@@ -22,14 +20,6 @@ const cancelRoleEditButton = document.getElementById('cancelRoleEditBtn');
 let currentUser = null;
 let permissions = {};
 
-function getInternalEmail(username) {
-  return `${username.trim().toLowerCase()}@usuarios.consentimiento.app`;
-}
-
-function isValidBaseUsername(username) {
-  return /^[a-z0-9._-]{3,40}$/.test(username);
-}
-
 async function getFunctionError(error, data, fallback) {
   if (data?.error) return data.error;
   if (error?.context instanceof Response) {
@@ -39,9 +29,6 @@ async function getFunctionError(error, data, fallback) {
     } catch (responseError) {
       console.warn('No se pudo leer el error de la Edge Function', responseError);
     }
-  }
-  if (error?.context?.status === 404) {
-    return 'La Edge Function create-base-user no está desplegada en este proyecto de Supabase. Despliegue la función y vuelva a cargar la aplicación.';
   }
   if (error?.context?.status) return `${error.message || fallback} (HTTP ${error.context.status})`;
   return error?.message || fallback;
@@ -1064,23 +1051,24 @@ async function loadRolesAndUsers() {
     return;
   }
   newUserRole.innerHTML = (roles || []).map((role) => `<option value="${role.id}">${role.name}</option>`).join('');
-  const { data: userData, error: usersError } = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'list' } });
-  if (usersError || userData?.error) {
-    userManagementMessage.textContent = await getFunctionError(usersError, userData, 'No se pudieron cargar los usuarios.');
+  const { data: profiles, error: usersError } = await supabaseClient
+    .from('app_profiles')
+    .select('id, email, username, account_type, role_id, app_roles(name)')
+    .order('created_at', { ascending: true });
+  if (usersError) {
+    userManagementMessage.textContent = `No se pudieron cargar los usuarios: ${usersError.message}`;
     usersList.innerHTML = '<div class="empty-state">No se pudieron cargar los usuarios.</div>';
     return;
   }
-  const profiles = userData?.users || [];
   usersList.innerHTML = profiles.map((profile) => `
     <div class="saved-item">
-      <strong>${escapeHtml(profile.account_type === 'base' ? profile.username : profile.email)}</strong>
-      <small>${profile.account_type === 'base' ? 'Usuario base' : 'Administrador'}</small>
+      <strong>${escapeHtml(profile.email)}</strong>
+      <small>Usuario con acceso por correo</small>
       <div class="user-management-row">
         <select data-user-role="${profile.id}">
           ${(roles || []).map((role) => `<option value="${role.id}" ${role.id === profile.role_id ? 'selected' : ''}>${escapeHtml(role.name)}</option>`).join('')}
         </select>
         <button type="button" class="btn btn-secondary" data-user-action="role" data-user-id="${profile.id}">Guardar rol</button>
-        <button type="button" class="btn btn-secondary" data-user-action="password" data-user-id="${profile.id}">Cambiar clave</button>
         <button type="button" class="btn btn-outline" data-user-action="delete" data-user-id="${profile.id}">${profile.id === currentUser?.id ? 'No revocar' : 'Revocar acceso'}</button>
       </div>
     </div>
@@ -1179,25 +1167,13 @@ async function handleUserAction(event) {
   const userId = button.dataset.userId;
   if (button.dataset.userAction === 'role') {
     const roleId = usersList.querySelector(`[data-user-role="${userId}"]`).value;
-    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'update_role', user_id: userId, role_id: roleId } });
-    userManagementMessage.textContent = result.error || result.data?.error
-      ? await getFunctionError(result.error, result.data, 'No se pudo actualizar el rol.')
-      : 'Rol del usuario actualizado.';
-  }
-  if (button.dataset.userAction === 'password') {
-    const password = window.prompt('Escriba la nueva clave (mínimo 6 caracteres):');
-    if (!password) return;
-    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'reset_password', user_id: userId, password } });
-    userManagementMessage.textContent = result.error || result.data?.error
-      ? await getFunctionError(result.error, result.data, 'No se pudo cambiar la clave.')
-      : 'Clave actualizada correctamente.';
+    const { error } = await supabaseClient.from('app_profiles').update({ role_id: roleId }).eq('id', userId);
+    userManagementMessage.textContent = error ? `No se pudo actualizar el rol: ${error.message}` : 'Rol del usuario actualizado.';
   }
   if (button.dataset.userAction === 'delete' && userId !== currentUser?.id) {
     if (!window.confirm('¿Desea revocar el acceso de este usuario?')) return;
-    const result = await supabaseClient.functions.invoke('create-base-user', { body: { action: 'delete', user_id: userId } });
-    userManagementMessage.textContent = result.error || result.data?.error
-      ? await getFunctionError(result.error, result.data, 'No se pudo revocar el acceso.')
-      : 'Acceso del usuario revocado.';
+    const { error } = await supabaseClient.from('app_profiles').delete().eq('id', userId);
+    userManagementMessage.textContent = error ? `No se pudo revocar el acceso: ${error.message}` : 'Acceso del usuario revocado.';
   }
   await loadRolesAndUsers();
 }
@@ -1225,38 +1201,18 @@ createUserForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!requirePermission('users', true)) return;
   userManagementMessage.textContent = '';
-  const identifier = newUserIdentifier.value.trim().toLowerCase();
-  const isAdmin = newUserType.value === 'admin';
-  if (!isAdmin && !isValidBaseUsername(identifier)) {
-    userManagementMessage.textContent = 'El usuario base debe tener entre 3 y 40 caracteres: letras, números, punto, guion o guion bajo.';
+  const email = newUserEmail.value.trim().toLowerCase();
+  if (!email.includes('@')) {
+    userManagementMessage.textContent = 'Ingrese un correo válido para el administrador.';
     return;
   }
-  if (isAdmin && !identifier.includes('@')) {
-    userManagementMessage.textContent = 'El administrador debe registrarse con un correo válido.';
-    return;
-  }
-  if (!isAdmin) {
-    const { data, error } = await supabaseClient.functions.invoke('create-base-user', {
-      body: { username: identifier, password: newUserPassword.value, role_id: newUserRole.value }
-    });
-    if (error || data?.error) {
-      userManagementMessage.textContent = await getFunctionError(error, data, 'No se pudo crear el usuario base.');
-      return;
-    }
-    createUserForm.reset();
-    userManagementMessage.textContent = 'Usuario base creado correctamente. Puede ingresar con su usuario y clave.';
-    await loadRolesAndUsers();
-    return;
-  }
-  const email = isAdmin ? identifier : getInternalEmail(identifier);
   const currentSession = (await supabaseClient.auth.getSession()).data.session;
   const { data, error } = await supabaseClient.auth.signUp({
     email,
     password: newUserPassword.value,
     options: {
       data: {
-        username: isAdmin ? null : identifier,
-        account_type: isAdmin ? 'admin' : 'base'
+        account_type: 'admin'
       }
     }
   });
@@ -1274,8 +1230,8 @@ createUserForm.addEventListener('submit', async (event) => {
   const { error: profileError } = await supabaseClient.from('app_profiles').upsert({
     id: data.user.id,
     email,
-    username: isAdmin ? null : identifier,
-    account_type: isAdmin ? 'admin' : 'base',
+    username: null,
+    account_type: 'admin',
     role_id: newUserRole.value
   });
   if (profileError) {
@@ -1286,13 +1242,6 @@ createUserForm.addEventListener('submit', async (event) => {
   createUserForm.reset();
   userManagementMessage.textContent = 'Usuario creado y rol asignado correctamente.';
   await loadRolesAndUsers();
-});
-
-newUserType.addEventListener('change', () => {
-  const isAdmin = newUserType.value === 'admin';
-  newUserIdentifierLabel.textContent = isAdmin ? 'Correo del administrador' : 'Usuario base';
-  newUserIdentifier.type = isAdmin ? 'email' : 'text';
-  newUserIdentifier.placeholder = isAdmin ? 'admin@ejemplo.com' : 'usuario1';
 });
 
 roleForm.addEventListener('submit', saveRole);
