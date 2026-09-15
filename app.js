@@ -40,6 +40,9 @@ async function getFunctionError(error, data, fallback) {
       console.warn('No se pudo leer el error de la Edge Function', responseError);
     }
   }
+  if (error?.context?.status === 404) {
+    return 'La Edge Function create-base-user no está desplegada en este proyecto de Supabase. Despliegue la función y vuelva a cargar la aplicación.';
+  }
   if (error?.context?.status) return `${error.message || fallback} (HTTP ${error.context.status})`;
   return error?.message || fallback;
 }
