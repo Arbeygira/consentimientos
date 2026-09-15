@@ -55,13 +55,31 @@ Deno.serve(async (request) => {
       .select('id, email, username, account_type, role_id, created_at')
       .order('created_at', { ascending: true });
     if (profilesError) return response({ error: profilesError.message }, 400);
-    return response({ users: profiles || [] });
+    const { data: authUsers, error: authUsersError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    if (authUsersError) return response({ error: authUsersError.message }, 400);
+    const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]));
+    const users = (authUsers.users || []).map((user) => profileById.get(user.id) || {
+      id: user.id,
+      email: user.email || '',
+      username: user.user_metadata?.username || '',
+      account_type: user.user_metadata?.account_type || 'base',
+      role_id: null,
+      created_at: user.created_at
+    });
+    return response({ users });
   }
 
   const { username, password, role_id: roleId, user_id: userId } = payload;
   if (action === 'update_role') {
     if (!userId || !roleId) return response({ error: 'Faltan el usuario o el rol.' }, 400);
-    const { error } = await adminClient.from('app_profiles').update({ role_id: roleId }).eq('id', userId);
+    const { data: target } = await adminClient.auth.admin.getUserById(userId);
+    const { error } = await adminClient.from('app_profiles').upsert({
+      id: userId,
+      email: target.user?.email || '',
+      username: target.user?.user_metadata?.username || null,
+      account_type: target.user?.user_metadata?.account_type || 'base',
+      role_id: roleId
+    });
     return error ? response({ error: error.message }, 400) : response({ ok: true });
   }
 
