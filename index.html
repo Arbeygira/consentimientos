@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Consentimiento informado</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+  </head>
+  <body>
+    <section id="loginView" class="login-view" aria-labelledby="loginTitle">
+      <form id="loginForm" class="login-card">
+        <div class="login-mark">LAGM</div>
+        <h1 id="loginTitle">Ingreso a la aplicación</h1>
+        <p class="login-subtitle">Consentimiento informado</p>
+        <label>
+          Usuario
+          <input type="text" id="loginUser" autocomplete="username" required />
+        </label>
+        <label>
+          Clave
+          <input type="password" id="loginPassword" autocomplete="current-password" required />
+        </label>
+        <p id="loginError" class="login-error" role="alert"></p>
+        <button type="submit" class="btn btn-primary login-button">Ingresar</button>
+      </form>
+    </section>
+
+    <div class="app-shell">
+      <nav class="main-menu" aria-label="Menú principal">
+        <button type="button" class="menu-tab active" data-view="edit">Editar formulario</button>
+        <button type="button" class="menu-tab" data-view="fill">Llenar formulario</button>
+        <button type="button" class="menu-tab" data-view="consult">Consultar formularios</button>
+        <button type="button" class="logout-button" id="logoutBtn">Cerrar sesión</button>
+      </nav>
+
+      <section id="editView" class="view-panel active-view">
+        <div class="panel-card editor-panel">
+          <h2>Editar contenido del formulario</h2>
+          <div class="editor-grid">
+            <label>
+              Título del documento
+              <input type="text" id="editTitle" value="CONSENTIMIENTO INFORMADO" />
+            </label>
+            <label>
+              Responsable / Municipio
+              <input type="text" id="editResponsable" value="Municipio de Rionegro" />
+            </label>
+            <label>
+              Municipio
+              <input type="text" id="editMunicipio" value="Rionegro" />
+            </label>
+            <label>
+              ESE o institución
+              <input type="text" id="editInstitucion" value="" />
+            </label>
+            <label class="full-span logo-field">
+              Logo de la institución
+              <input type="file" id="logoInput" accept="image/*" />
+              <div class="logo-preview-box">
+                <img id="logoPreview" alt="Logo de la institución" />
+              </div>
+            </label>
+            <label class="full-span">
+              Objetivo
+              <textarea id="editObjetivo" rows="4">Obtener por medio de una entrevista, información de la dinámica familiar que ayudará a realizar un diagnóstico del proyecto de salud y a potenciar las acciones de prevención y acompañamiento comunitario.</textarea>
+            </label>
+            <label class="full-span">
+              Visita familiar
+              <textarea id="editVisita" rows="4">La visita familiar es el centro de atención primaria, en ella describimos y comprendemos las necesidades, potencialidades y factores que inciden en la salud de la familia. Durante la visita familiar los estudiantes y docentes realizarán preguntas al jefe del hogar y sus demás integrantes.</textarea>
+            </label>
+            <label class="full-span">
+              Importancia
+              <textarea id="editImportancia" rows="4">La información servirá para diagnosticar las situaciones no evidentes, aspectos y problemáticas que se presentan en los diferentes ámbitos del hogar y la comunidad. Esta información contribuirá a la mejora del bienestar familiar y al fortalecimiento del acompañamiento institucional.</textarea>
+            </label>
+            <label class="full-span">
+              Confidencialidad
+              <textarea id="editConfidencialidad" rows="4">Los estudiantes y docentes se comprometen a guardar fielmente la información suministrada por usted; tratarla con respeto, no compartirla con terceros y utilizarla exclusivamente con fines de acompañamiento y apoyo a la comunidad.</textarea>
+            </label>
+            <label class="full-span">
+              Mensaje de aceptación
+              <textarea id="editAceptacion" rows="4">Manifiesto que no he recibido presiones verbales, físicas ni económicas para participar; que he decidido de forma libre y voluntaria participar en este proceso.</textarea>
+            </label>
+          </div>
+
+          <div class="template-selector-row editor-template-selector">
+            <label for="editTemplateSelect">Editar formulario guardado</label>
+            <select id="editTemplateSelect">
+              <option value="">Seleccionar formulario guardado</option>
+            </select>
+            <button type="button" class="btn btn-outline" id="deleteTemplateBtn">Eliminar formulario guardado</button>
+          </div>
+
+          <div class="action-row editor-actions">
+            <label class="template-name-field">
+              Nombre del formulario
+              <input type="text" id="templateName" placeholder="Ej. Consentimiento visita familiar" />
+            </label>
+            <button type="button" class="btn btn-primary" id="applyTemplateBtn">Aplicar cambios</button>
+            <button type="button" class="btn btn-secondary" id="updateTemplateBtn">Guardar cambios del formulario seleccionado</button>
+            <button type="button" class="btn btn-secondary" id="saveTemplateBtn">Guardar como nuevo formulario</button>
+          </div>
+
+          <section class="pdf-design-panel" aria-labelledby="pdfDesignTitle">
+            <h3 id="pdfDesignTitle">Diseño del PDF</h3>
+            <div class="design-grid">
+              <label>
+                Color principal
+                <input type="color" id="pdfPrimaryColor" value="#007e53" />
+              </label>
+              <label>
+                Color de acento
+                <input type="color" id="pdfAccentColor" value="#f6ca1b" />
+              </label>
+              <label>
+                Color del título
+                <input type="color" id="pdfTitleColor" value="#000000" />
+              </label>
+              <label>
+                Tamaño de texto
+                <input type="number" id="pdfFontSize" min="5" max="8" step="0.1" value="5.8" />
+              </label>
+              <label>
+                Ancho del logo (mm)
+                <input type="number" id="pdfLogoWidth" min="25" max="60" step="1" value="42" />
+              </label>
+            </div>
+            <button type="button" class="btn btn-secondary" id="saveDesignBtn">Guardar diseño del PDF</button>
+          </section>
+        </div>
+      </section>
+
+      <section id="fillView" class="view-panel hidden-view">
+        <div class="document-card">
+          <header class="doc-header">
+            <img id="fillLogoPreview" src="" alt="Logo institucional" />
+          </header>
+
+          <h1 id="formTitle">CONSENTIMIENTO INFORMADO</h1>
+
+          <div class="template-selector-row">
+            <label for="templateSelect">Formulario que desea llenar</label>
+            <select id="templateSelect">
+              <option value="">Usar formulario actual</option>
+            </select>
+          </div>
+
+          <form id="consentForm">
+            <div class="table-box">
+              <div class="field-row two-cols">
+                <label class="field-line">
+                  <span>Responsables de la Estrategia en el Municipio:</span>
+                  <input type="text" name="responsablesMunicipio" value="Municipio de Rionegro" />
+                </label>
+                <label class="field-line">
+                  <span>Municipio:</span>
+                  <input type="text" name="municipio" value="Rionegro" />
+                </label>
+                <label class="field-line">
+                  <span>ESE o institución:</span>
+                  <input type="text" name="institucion" value="" />
+                </label>
+              </div>
+
+              <div class="field-row two-cols">
+                <label class="field-line">
+                  <span>Nombre completo:</span>
+                  <input type="text" name="nombrePaciente" value="" />
+                </label>
+                <label class="field-line">
+                  <span>Identificación:</span>
+                  <input type="text" name="documento" value="" />
+                </label>
+              </div>
+
+              <div class="section-label">INFORMACIÓN DE LA PERSONA</div>
+
+              <div class="field-row three-cols">
+                <label class="field-line">
+                  <span>Nombre completo:</span>
+                  <input type="text" name="nombreCompletoPersona" value="" />
+                </label>
+                <label class="field-line">
+                  <span>Edad:</span>
+                  <input type="text" name="edad" value="" />
+                </label>
+                <label class="field-line">
+                  <span>Documento:</span>
+                  <input type="text" name="documentoPersona" value="" />
+                </label>
+              </div>
+
+              <div class="field-block">
+                <label>
+                  <span>OBJETIVO:</span>
+                  <textarea name="objetivo" rows="4">Obtener por medio de una entrevista, información de la dinámica familiar que ayudará a realizar un diagnóstico del proyecto de salud y a potenciar las acciones de prevención y acompañamiento comunitario.</textarea>
+                </label>
+              </div>
+
+              <div class="section-label">VISITA FAMILIAR</div>
+              <div class="field-block">
+                <label>
+                  <span>Descripción:</span>
+                  <textarea name="visitaFamiliar" rows="4">La visita familiar es el centro de atención primaria, en ella describimos y comprendemos las necesidades, potencialidades y factores que inciden en la salud de la familia. Durante la visita familiar los estudiantes y docentes realizarán preguntas al jefe del hogar y sus demás integrantes.</textarea>
+                </label>
+              </div>
+
+              <div class="section-label">IMPORTANCIA</div>
+              <div class="field-block">
+                <label>
+                  <span>Detalle:</span>
+                  <textarea name="importancia" rows="4">La información servirá para diagnosticar las situaciones no evidentes, aspectos y problemáticas que se presentan en los diferentes ámbitos del hogar y la comunidad. Esta información contribuirá a la mejora del bienestar familiar y al fortalecimiento del acompañamiento institucional.</textarea>
+                </label>
+              </div>
+
+              <div class="section-label">CONFIDENCIALIDAD</div>
+              <div class="field-block">
+                <label>
+                  <span>Detalle:</span>
+                  <textarea name="confidencialidad" rows="4">Los estudiantes y docentes se comprometen a guardar fielmente la información suministrada por usted; tratarla con respeto, no compartirla con terceros y utilizarla exclusivamente con fines de acompañamiento y apoyo a la comunidad.</textarea>
+                </label>
+              </div>
+
+              <div class="section-label">ACEPTACIÓN</div>
+              <div class="checkbox-row">
+                <input type="checkbox" name="acepto" id="acepto" checked />
+                <label for="acepto" id="acceptanceMessage">Manifiesto que no he recibido presiones verbales, físicas ni económicas para participar; que he decidido de forma libre y voluntaria participar en este proceso.</label>
+              </div>
+
+              <div class="signature-row">
+                <div class="signature-box">
+                  <span>RESPONSABLE</span>
+                  <div class="signature-area">
+                    <canvas id="signatureCanvas" width="680" height="120" aria-label="Espacio para firmar"></canvas>
+                  </div>
+                  <div class="signature-labels">
+                    <div class="signature-name">NOMBRE COMPLETO</div>
+                    <div class="signature-name">LUGAR, FECHA</div>
+                    <div class="signature-name">FIRMA</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field-row three-cols small-gap">
+                <label class="field-line">
+                  <span>Nombre del firmante:</span>
+                  <input type="text" name="nombreFirmante" value="" />
+                </label>
+                <label class="field-line">
+                  <span>Fecha de firma:</span>
+                  <input type="date" name="fechaFirma" value="" />
+                </label>
+                <label class="field-line">
+                  <span>Lugar de firma:</span>
+                  <input type="text" name="lugarFirma" value="" />
+                </label>
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button type="button" class="btn btn-outline" id="clearFieldsBtn">Limpiar campos</button>
+              <button type="button" class="btn btn-primary" id="savePdfBtn">Guardar PDF firmado</button>
+              <button type="button" class="btn btn-secondary" id="downloadBtn">Descargar PDF</button>
+              <button type="button" class="btn btn-outline" id="clearSignature">Limpiar firma</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="consultView" class="view-panel hidden-view">
+        <aside class="sidebar-card consult-card">
+          <div class="sidebar-header">
+            <span>Documentos firmados</span>
+            <span class="count-badge" id="documentsCount">0</span>
+          </div>
+          <div id="savedDocuments" class="saved-documents"></div>
+        </aside>
+      </section>
+    </div>
+
+    <footer class="footer-info">
+      <div class="footer-row social-row">
+        <span>Derechos reservados de LAGM 2026 Enfermería</span>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

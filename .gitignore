@@ -1,0 +1,11 @@
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos locales y temporales
+*.log
+.env
+.env.*
+
+# Datos exportados localmente
+*.pdf
