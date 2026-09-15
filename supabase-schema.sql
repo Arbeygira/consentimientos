@@ -14,8 +14,15 @@ create table if not exists public.signed_forms (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.form_templates enable row level security;
 alter table public.signed_forms enable row level security;
+alter table public.app_settings enable row level security;
 
 drop policy if exists "Allow public template reads" on public.form_templates;
 drop policy if exists "Allow public template inserts" on public.form_templates;
@@ -24,6 +31,8 @@ drop policy if exists "Allow public template deletes" on public.form_templates;
 drop policy if exists "Allow public signed form reads" on public.signed_forms;
 drop policy if exists "Allow public signed form inserts" on public.signed_forms;
 drop policy if exists "Allow public signed form deletes" on public.signed_forms;
+drop policy if exists "Allow public app setting reads" on public.app_settings;
+drop policy if exists "Allow public app setting writes" on public.app_settings;
 
 create policy "Allow public template reads"
   on public.form_templates for select
@@ -53,3 +62,12 @@ create policy "Allow public signed form inserts"
 create policy "Allow public signed form deletes"
   on public.signed_forms for delete
   using (true);
+
+create policy "Allow public app setting reads"
+  on public.app_settings for select
+  using (true);
+
+create policy "Allow public app setting writes"
+  on public.app_settings for all
+  using (true)
+  with check (true);

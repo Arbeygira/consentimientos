@@ -340,6 +340,8 @@ h1 {
   height: 120px;
   display: block;
   cursor: crosshair;
+  touch-action: none;
+  user-select: none;
 }
 
 .signature-labels {

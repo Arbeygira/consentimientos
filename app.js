@@ -53,6 +53,7 @@ const viewPanels = {
 
 const STORAGE_KEY = 'signedConsentForms';
 const LOGO_KEY = 'consentInstitutionLogo';
+const LOGO_SETTING_KEY = 'institution_logo';
 const TEMPLATE_KEY = 'consentFormTemplate';
 const TEMPLATES_KEY = 'consentFormTemplates';
 const DESIGN_KEY = 'consentPdfDesign';
@@ -71,6 +72,24 @@ const signaturePad = new SignaturePad(signatureCanvas, {
   penColor: '#101827',
   backgroundColor: '#ffffff'
 });
+
+function resizeSignatureCanvas() {
+  const width = signatureCanvas.getBoundingClientRect().width;
+  const height = signatureCanvas.getBoundingClientRect().height;
+  if (!width || !height) return;
+
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  const pixelWidth = Math.round(width * ratio);
+  const pixelHeight = Math.round(height * ratio);
+  if (signatureCanvas.width === pixelWidth && signatureCanvas.height === pixelHeight) return;
+
+  const signatureData = signaturePad.isEmpty() ? null : signaturePad.toData();
+  signatureCanvas.width = pixelWidth;
+  signatureCanvas.height = pixelHeight;
+  signatureCanvas.getContext('2d').scale(ratio, ratio);
+  signaturePad.clear();
+  if (signatureData) signaturePad.fromData(signatureData);
+}
 
 function setAuthenticated(isAuthenticated) {
   loginView.classList.toggle('hidden-view', isAuthenticated);
@@ -531,6 +550,16 @@ function buildPdfAndDataUrl() {
 function saveLogoToStorage(dataUrl) {
   localStorage.setItem(LOGO_KEY, dataUrl);
   updateLogoPreview(dataUrl);
+
+  return supabaseClient
+    .from('app_settings')
+    .upsert({ key: LOGO_SETTING_KEY, value: dataUrl }, { onConflict: 'key' })
+    .then(({ error }) => {
+      if (error) throw error;
+    })
+    .catch((error) => {
+      console.warn('No se pudo sincronizar el logo entre dispositivos', error);
+    });
 }
 
 function updateLogoPreview(dataUrl) {
@@ -544,10 +573,28 @@ function updateLogoPreview(dataUrl) {
   fillLogoPreview.src = dataUrl;
 }
 
-function loadStoredLogo() {
+async function loadStoredLogo() {
   const storedLogo = localStorage.getItem(LOGO_KEY);
   if (storedLogo) {
     updateLogoPreview(storedLogo);
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('app_settings')
+      .select('value')
+      .eq('key', LOGO_SETTING_KEY)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (data?.value) {
+      localStorage.setItem(LOGO_KEY, data.value);
+      updateLogoPreview(data.value);
+    } else if (storedLogo) {
+      await saveLogoToStorage(storedLogo);
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar el logo compartido', error);
   }
 }
 
@@ -723,8 +770,7 @@ async function saveCurrentDocument() {
 
   const { pdfDataUrl, fileName } = await buildPdfAndDataUrl();
   await savePdfToStorage(pdfDataUrl, fileName);
-  triggerDownload(pdfDataUrl, fileName);
-  alert('El formulario firmado se guardó correctamente en PDF.');
+  alert('El formulario firmado se guardó correctamente. Puede descargarlo desde el botón "Descargar PDF".');
 }
 
 function handleSavedActions(event) {
@@ -758,6 +804,8 @@ function switchView(viewName) {
     panel.classList.toggle('hidden-view', key !== viewName);
     panel.classList.toggle('active-view', key === viewName);
   });
+
+  if (viewName === 'fill') requestAnimationFrame(resizeSignatureCanvas);
 }
 
 function applyTemplateChanges() {
@@ -821,6 +869,7 @@ downloadButton.addEventListener('click', async () => {
   triggerDownload(pdfDataUrl, fileName);
 });
 clearSignatureButton.addEventListener('click', () => signaturePad.clear());
+window.addEventListener('resize', resizeSignatureCanvas);
 clearFieldsButton.addEventListener('click', () => {
   consentForm.querySelectorAll('input[type="text"], input[type="date"]').forEach((field) => {
     field.value = '';
