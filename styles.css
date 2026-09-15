@@ -559,6 +559,105 @@ h1 {
   cursor: pointer;
 }
 
+.design-wide-field {
+  grid-column: span 2;
+}
+
+.user-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.user-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.user-form input,
+.user-form select {
+  width: 100%;
+  border: 1px solid #939393;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.management-divider {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid #d4dfdb;
+}
+
+.editor-panel h3 {
+  margin: 0 0 14px;
+  color: var(--green-deep);
+  font-size: 1rem;
+}
+
+.role-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.role-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.role-form > label input {
+  width: 100%;
+  border: 1px solid #939393;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.permission-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d4dfdb;
+  border-radius: 8px;
+}
+
+.permission-grid legend {
+  padding: 0 6px;
+  color: var(--green-deep);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.permission-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.permission-grid input {
+  accent-color: var(--primary);
+}
+
+.role-actions {
+  grid-column: 1 / -1;
+  padding-top: 0;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -625,6 +724,22 @@ h1 {
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.user-management-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.user-management-row select {
+  min-width: 160px;
+  border: 1px solid #939393;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+  font-size: 0.72rem;
 }
 
 .empty-state {
@@ -711,5 +826,18 @@ h1 {
 
   .design-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .design-wide-field {
+    grid-column: span 2;
+  }
+
+  .user-form {
+    grid-template-columns: 1fr;
+  }
+
+  .role-form,
+  .permission-grid {
+    grid-template-columns: 1fr;
   }
 }

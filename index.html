@@ -21,7 +21,7 @@
         <p class="login-subtitle">Consentimiento informado</p>
         <label>
           Usuario
-          <input type="text" id="loginUser" autocomplete="username" required />
+          <input type="email" id="loginUser" autocomplete="username" required />
         </label>
         <label>
           Clave
@@ -34,9 +34,10 @@
 
     <div class="app-shell">
       <nav class="main-menu" aria-label="Menú principal">
-        <button type="button" class="menu-tab active" data-view="edit">Editar formulario</button>
-        <button type="button" class="menu-tab" data-view="fill">Llenar formulario</button>
-        <button type="button" class="menu-tab" data-view="consult">Consultar formularios</button>
+        <button type="button" class="menu-tab active" data-view="edit" data-permission="edit">Editar formulario</button>
+        <button type="button" class="menu-tab" data-view="fill" data-permission="fill">Llenar formulario</button>
+        <button type="button" class="menu-tab" data-view="consult" data-permission="consult">Consultar formularios</button>
+        <button type="button" class="menu-tab" data-view="users" data-permission="users">Usuarios y roles</button>
         <button type="button" class="logout-button" id="logoutBtn">Cerrar sesión</button>
       </nav>
 
@@ -102,9 +103,9 @@
               Nombre del formulario
               <input type="text" id="templateName" placeholder="Ej. Consentimiento visita familiar" />
             </label>
-            <button type="button" class="btn btn-primary" id="applyTemplateBtn">Aplicar cambios</button>
-            <button type="button" class="btn btn-secondary" id="updateTemplateBtn">Guardar cambios del formulario seleccionado</button>
-            <button type="button" class="btn btn-secondary" id="saveTemplateBtn">Guardar como nuevo formulario</button>
+            <button type="button" class="btn btn-primary" id="applyTemplateBtn" data-permission="edit" data-requires-edit>Aplicar cambios</button>
+            <button type="button" class="btn btn-secondary" id="updateTemplateBtn" data-permission="edit" data-requires-edit>Guardar cambios del formulario seleccionado</button>
+            <button type="button" class="btn btn-secondary" id="saveTemplateBtn" data-permission="edit" data-requires-edit>Guardar como nuevo formulario</button>
           </div>
 
           <section class="pdf-design-panel" aria-labelledby="pdfDesignTitle">
@@ -130,8 +131,12 @@
                 Ancho del logo (mm)
                 <input type="number" id="pdfLogoWidth" min="25" max="60" step="1" value="42" />
               </label>
+              <label class="design-wide-field">
+                Pie de página / PID del PDF
+                <input type="text" id="pdfFooterText" value="PBX: (+57) 604 569 90 90  WhatsApp: 322 569 90 90" />
+              </label>
             </div>
-            <button type="button" class="btn btn-secondary" id="saveDesignBtn">Guardar diseño del PDF</button>
+            <button type="button" class="btn btn-secondary" id="saveDesignBtn" data-permission="edit" data-requires-edit>Guardar diseño del PDF</button>
           </section>
         </div>
       </section>
@@ -281,6 +286,59 @@
           </div>
           <div id="savedDocuments" class="saved-documents"></div>
         </aside>
+      </section>
+
+      <section id="usersView" class="view-panel hidden-view">
+        <div class="panel-card editor-panel">
+          <h2>Crear usuario y asignar rol</h2>
+          <form id="createUserForm" class="user-form">
+            <label>
+              Correo del usuario
+              <input type="email" id="newUserEmail" required autocomplete="off" />
+            </label>
+            <label>
+              Contraseña temporal
+              <input type="password" id="newUserPassword" required minlength="6" autocomplete="new-password" />
+            </label>
+            <label>
+              Rol
+              <select id="newUserRole" required></select>
+            </label>
+            <button type="submit" class="btn btn-primary">Crear usuario</button>
+          </form>
+          <p id="userManagementMessage" class="login-error" role="status"></p>
+          <div id="usersList" class="saved-documents"></div>
+
+          <hr class="management-divider" />
+          <h3>Roles y permisos</h3>
+          <form id="roleForm" class="role-form">
+            <input type="hidden" id="editingRoleId" />
+            <label>
+              Nombre del rol
+              <input type="text" id="roleName" required maxlength="60" />
+            </label>
+            <label>
+              Descripción
+              <input type="text" id="roleDescription" maxlength="160" />
+            </label>
+            <fieldset class="permission-grid">
+              <legend>Permisos</legend>
+              <label><input type="checkbox" data-role-permission="edit" /> Editar formulario</label>
+              <label><input type="checkbox" data-role-permission="fill" /> Llenar formulario</label>
+              <label><input type="checkbox" data-role-permission="consult" /> Consultar formularios</label>
+              <label><input type="checkbox" data-role-permission="users" /> Administrar usuarios y roles</label>
+              <label><input type="checkbox" data-role-edit="edit" /> Puede modificar diseños</label>
+              <label><input type="checkbox" data-role-edit="fill" /> Puede guardar formularios</label>
+              <label><input type="checkbox" data-role-edit="consult" /> Puede eliminar documentos</label>
+              <label><input type="checkbox" data-role-edit="users" /> Puede modificar permisos</label>
+            </fieldset>
+            <div class="action-row role-actions">
+              <button type="submit" class="btn btn-primary">Guardar rol</button>
+              <button type="button" class="btn btn-outline" id="cancelRoleEditBtn">Cancelar edición</button>
+            </div>
+          </form>
+          <div id="rolesList" class="saved-documents"></div>
+        </div>
       </section>
     </div>
 

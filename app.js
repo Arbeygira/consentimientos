@@ -4,10 +4,21 @@ const loginUser = document.getElementById('loginUser');
 const loginPassword = document.getElementById('loginPassword');
 const loginError = document.getElementById('loginError');
 const logoutButton = document.getElementById('logoutBtn');
+const createUserForm = document.getElementById('createUserForm');
+const newUserEmail = document.getElementById('newUserEmail');
+const newUserPassword = document.getElementById('newUserPassword');
+const newUserRole = document.getElementById('newUserRole');
+const usersList = document.getElementById('usersList');
+const userManagementMessage = document.getElementById('userManagementMessage');
+const roleForm = document.getElementById('roleForm');
+const editingRoleId = document.getElementById('editingRoleId');
+const roleNameInput = document.getElementById('roleName');
+const roleDescriptionInput = document.getElementById('roleDescription');
+const rolesList = document.getElementById('rolesList');
+const cancelRoleEditButton = document.getElementById('cancelRoleEditBtn');
 
-const SESSION_KEY = 'consentAppSession';
-const LOGIN_USER = 'lagm';
-const LOGIN_PASSWORD = 'enfermeria';
+let currentUser = null;
+let permissions = {};
 
 const consentForm = document.getElementById('consentForm');
 const savedDocumentsContainer = document.getElementById('savedDocuments');
@@ -39,6 +50,7 @@ const pdfAccentColorInput = document.getElementById('pdfAccentColor');
 const pdfTitleColorInput = document.getElementById('pdfTitleColor');
 const pdfFontSizeInput = document.getElementById('pdfFontSize');
 const pdfLogoWidthInput = document.getElementById('pdfLogoWidth');
+const pdfFooterTextInput = document.getElementById('pdfFooterText');
 const saveDesignButton = document.getElementById('saveDesignBtn');
 const logoInput = document.getElementById('logoInput');
 const logoPreview = document.getElementById('logoPreview');
@@ -48,7 +60,8 @@ const menuTabs = document.querySelectorAll('.menu-tab');
 const viewPanels = {
   edit: document.getElementById('editView'),
   fill: document.getElementById('fillView'),
-  consult: document.getElementById('consultView')
+  consult: document.getElementById('consultView'),
+  users: document.getElementById('usersView')
 };
 
 const STORAGE_KEY = 'signedConsentForms';
@@ -64,7 +77,8 @@ const defaultPdfDesign = {
   accentColor: '#f6ca1b',
   titleColor: '#000000',
   fontSize: 5.8,
-  logoWidth: 42
+  logoWidth: 42,
+  footerText: 'PBX: (+57) 604 569 90 90  WhatsApp: 322 569 90 90'
 };
 const signaturePad = new SignaturePad(signatureCanvas, {
   minWidth: 1.2,
@@ -97,24 +111,85 @@ function setAuthenticated(isAuthenticated) {
   document.querySelector('.footer-info').classList.toggle('hidden-view', !isAuthenticated);
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
-  if (loginUser.value.trim().toLowerCase() !== LOGIN_USER || loginPassword.value !== LOGIN_PASSWORD) {
-    loginError.textContent = 'Usuario o clave incorrectos.';
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email: loginUser.value.trim().toLowerCase(),
+    password: loginPassword.value
+  });
+  if (error || !data.session) {
+    loginError.textContent = 'Correo o clave incorrectos.';
     loginPassword.select();
     return;
   }
 
-  sessionStorage.setItem(SESSION_KEY, 'authenticated');
   loginError.textContent = '';
   loginForm.reset();
-  setAuthenticated(true);
+  await initializeAccess(data.session);
 }
 
-function logout() {
-  sessionStorage.removeItem(SESSION_KEY);
+async function logout() {
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  permissions = {};
   setAuthenticated(false);
   loginUser.focus();
+}
+
+function hasPermission(permissionKey, requiresEdit = false) {
+  return Boolean(permissions[permissionKey] && (!requiresEdit || permissions[permissionKey].canEdit));
+}
+
+function requirePermission(permissionKey, requiresEdit = false) {
+  if (hasPermission(permissionKey, requiresEdit)) return true;
+  alert('No tiene permiso para realizar esta acción.');
+  return false;
+}
+
+async function initializeAccess(session) {
+  currentUser = session?.user || null;
+  if (!currentUser) {
+    setAuthenticated(false);
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('app_profiles')
+    .select('role_id, email')
+    .eq('id', currentUser.id)
+    .maybeSingle();
+  if (profileError || !profile?.role_id) {
+    loginError.textContent = 'Su usuario todavía no tiene un rol asignado.';
+    await supabaseClient.auth.signOut();
+    setAuthenticated(false);
+    return;
+  }
+
+  const { data: rolePermissions, error: permissionError } = await supabaseClient
+    .from('app_role_permissions')
+    .select('permission_key, can_edit')
+    .eq('role_id', profile.role_id);
+  if (permissionError) {
+    loginError.textContent = 'No se pudieron cargar los permisos del usuario.';
+    await supabaseClient.auth.signOut();
+    setAuthenticated(false);
+    return;
+  }
+
+  permissions = Object.fromEntries((rolePermissions || []).map((item) => [item.permission_key, { canEdit: item.can_edit }]));
+  applyPermissions();
+  setAuthenticated(true);
+  const firstAllowedView = Object.keys(viewPanels).find((key) => hasPermission(key));
+  if (firstAllowedView) switchView(firstAllowedView);
+  await loadRolesAndUsers();
+}
+
+function applyPermissions() {
+  document.querySelectorAll('[data-permission]').forEach((element) => {
+    const allowed = hasPermission(element.dataset.permission, element.hasAttribute('data-requires-edit'));
+    element.classList.toggle('hidden-view', !allowed);
+    if ('disabled' in element) element.disabled = !allowed;
+  });
 }
 
 function getFormValues() {
@@ -137,19 +212,53 @@ function loadPdfDesign() {
   pdfTitleColorInput.value = design.titleColor;
   pdfFontSizeInput.value = design.fontSize;
   pdfLogoWidthInput.value = design.logoWidth;
+  pdfFooterTextInput.value = design.footerText;
 }
 
-function savePdfDesign() {
+async function savePdfDesign() {
+  if (!requirePermission('edit', true)) return;
   const design = {
     primaryColor: pdfPrimaryColorInput.value,
     accentColor: pdfAccentColorInput.value,
     titleColor: pdfTitleColorInput.value,
     fontSize: Math.min(8, Math.max(5, Number(pdfFontSizeInput.value) || defaultPdfDesign.fontSize)),
-    logoWidth: Math.min(60, Math.max(25, Number(pdfLogoWidthInput.value) || defaultPdfDesign.logoWidth))
+    logoWidth: Math.min(60, Math.max(25, Number(pdfLogoWidthInput.value) || defaultPdfDesign.logoWidth)),
+    footerText: pdfFooterTextInput.value.trim() || defaultPdfDesign.footerText
   };
   localStorage.setItem(DESIGN_KEY, JSON.stringify(design));
   loadPdfDesign();
+  if (editingTemplateId) {
+    const logo = localStorage.getItem(LOGO_KEY) || '';
+    try {
+      const { error } = await supabaseClient
+        .from('form_templates')
+        .update({ design: { ...design, logo }, updated_at: new Date().toISOString() })
+        .eq('id', editingTemplateId);
+      if (error) throw error;
+    } catch (error) {
+      const localTemplates = getSavedTemplates().map((template) => template.id === editingTemplateId
+        ? { ...template, design: { ...design, logo }, logo }
+        : template);
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(localTemplates));
+    }
+    const storedTemplate = JSON.parse(localStorage.getItem(TEMPLATE_KEY) || 'null');
+    if (storedTemplate?.id === editingTemplateId) {
+      localStorage.setItem(TEMPLATE_KEY, JSON.stringify({ ...storedTemplate, design: { ...design, logo }, logo }));
+    }
+  }
   alert('El diseño del PDF se guardó correctamente.');
+}
+
+function applySavedDesign(design) {
+  if (!design || typeof design !== 'object') return;
+  localStorage.setItem(DESIGN_KEY, JSON.stringify({ ...defaultPdfDesign, ...design }));
+  loadPdfDesign();
+}
+
+function applySavedLogo(dataUrl) {
+  if (!dataUrl) return;
+  localStorage.setItem(LOGO_KEY, dataUrl);
+  updateLogoPreview(dataUrl);
 }
 
 function getTemplateValues() {
@@ -234,12 +343,19 @@ async function renderTemplateOptions() {
 }
 
 async function saveNamedTemplate() {
+  if (!requirePermission('edit', true)) return;
   const name = templateNameInput.value.trim() || editTitleInput.value.trim() || 'Formulario sin nombre';
-  const template = { id: `template-${Date.now()}`, name, ...getTemplateValues() };
+  const template = {
+    id: `template-${Date.now()}`,
+    name,
+    ...getTemplateValues(),
+    design: getPdfDesign(),
+    logo: localStorage.getItem(LOGO_KEY) || ''
+  };
   try {
     const { data, error } = await supabaseClient
       .from('form_templates')
-      .insert({ name, content: getTemplateValues(), design: getPdfDesign() })
+      .insert({ name, content: getTemplateValues(), design: { ...getPdfDesign(), logo: template.logo } })
       .select()
       .single();
     if (error) throw error;
@@ -259,6 +375,7 @@ async function saveNamedTemplate() {
 }
 
 async function updateSelectedTemplate() {
+  if (!requirePermission('edit', true)) return;
   if (!editingTemplateId) {
     alert('Seleccione primero un formulario guardado para editarlo.');
     return;
@@ -270,12 +387,14 @@ async function updateSelectedTemplate() {
   const updatedTemplate = {
     ...current,
     name: templateNameInput.value.trim() || current.name,
-    ...getTemplateValues()
+    ...getTemplateValues(),
+    design: getPdfDesign(),
+    logo: localStorage.getItem(LOGO_KEY) || current.logo || ''
   };
   try {
     const { error } = await supabaseClient
       .from('form_templates')
-      .update({ name: updatedTemplate.name, content: getTemplateValues(), design: getPdfDesign(), updated_at: new Date().toISOString() })
+      .update({ name: updatedTemplate.name, content: getTemplateValues(), design: { ...getPdfDesign(), logo: updatedTemplate.logo }, updated_at: new Date().toISOString() })
       .eq('id', editingTemplateId);
     if (error) throw error;
   } catch (error) {
@@ -291,6 +410,7 @@ async function updateSelectedTemplate() {
 }
 
 async function deleteSelectedTemplate() {
+  if (!requirePermission('edit', true)) return;
   if (!editingTemplateId) {
     alert('Seleccione primero un formulario guardado para eliminarlo.');
     return;
@@ -341,6 +461,8 @@ async function loadNamedTemplate(templateId) {
   editAceptacionInput.value = template.aceptacion || '';
   templateNameInput.value = template.name || '';
   editingTemplateId = template.id;
+  applySavedDesign(template.design);
+  applySavedLogo(template.logo || template.design?.logo);
   applyTemplateToForm(template);
   localStorage.setItem(TEMPLATE_KEY, JSON.stringify(template));
 }
@@ -365,6 +487,8 @@ async function loadStoredTemplate() {
     editAceptacionInput.value = templateToApply.aceptacion ?? editAceptacionInput.value;
     templateNameInput.value = templateToApply.name || '';
     editingTemplateId = templateToApply.id || '';
+    applySavedDesign(templateToApply.design);
+    applySavedLogo(templateToApply.logo || templateToApply.design?.logo);
     applyTemplateToForm(templateToApply);
   } catch (error) {
     localStorage.removeItem(TEMPLATE_KEY);
@@ -517,7 +641,7 @@ function buildPdfDocument() {
   pdf.setFontSize(6.3);
   pdf.setTextColor(0, 0, 0);
   const footerY = pageHeight - 17;
-  pdf.text('PBX: (+57) 604 569 90 90  WhatsApp: 322 569 90 90', 16, footerY);
+  pdf.text(design.footerText, 16, footerY);
   pdf.text('Sector 3, Cra. 46 No. 40B - 50  NIT: 890984746 - 7', 16, footerY + 4);
   pdf.text('Rionegro - Antioquia - Colombia', 16, footerY + 8);
   pdf.text('www.uco.edu.co   @uconiano   Universidad Católica de Oriente', 16, footerY + 13);
@@ -740,6 +864,7 @@ async function printDocument(id) {
 }
 
 async function deleteDocument(id) {
+  if (!requirePermission('consult', true)) return;
   const savedForms = await getAvailableSignedForms();
   const selected = savedForms.find((item) => item.id === id);
   if (!selected) return;
@@ -756,6 +881,7 @@ async function deleteDocument(id) {
 }
 
 async function saveCurrentDocument() {
+  if (!requirePermission('fill', true)) return;
   const data = getFormValues();
   const isAccepted = data.acepto === 'on';
   if (!isAccepted) {
@@ -796,6 +922,11 @@ function triggerDownload(pdfDataUrl, fileName) {
 }
 
 function switchView(viewName) {
+  if (!hasPermission(viewName)) {
+    const firstAllowed = Object.keys(viewPanels).find((key) => hasPermission(key));
+    if (firstAllowed && firstAllowed !== viewName) return switchView(firstAllowed);
+    return;
+  }
   menuTabs.forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.view === viewName);
   });
@@ -809,6 +940,7 @@ function switchView(viewName) {
 }
 
 function applyTemplateChanges() {
+  if (!requirePermission('edit', true)) return;
   const title = editTitleInput.value.trim() || 'CONSENTIMIENTO INFORMADO';
   const responsable = editResponsableInput.value.trim() || 'Municipio de Rionegro';
   const municipio = editMunicipioInput.value.trim() || 'Rionegro';
@@ -847,6 +979,10 @@ function applyTemplateChanges() {
 }
 
 logoInput.addEventListener('change', (event) => {
+  if (!requirePermission('edit', true)) {
+    event.target.value = '';
+    return;
+  }
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
@@ -860,6 +996,7 @@ logoInput.addEventListener('change', (event) => {
 
 savePdfButton.addEventListener('click', saveCurrentDocument);
 downloadButton.addEventListener('click', async () => {
+  if (!requirePermission('fill', true)) return;
   if (signaturePad.isEmpty()) {
     alert('Debe firmar el documento antes de descargar el PDF.');
     return;
@@ -871,6 +1008,7 @@ downloadButton.addEventListener('click', async () => {
 clearSignatureButton.addEventListener('click', () => signaturePad.clear());
 window.addEventListener('resize', resizeSignatureCanvas);
 clearFieldsButton.addEventListener('click', () => {
+  if (!requirePermission('fill', true)) return;
   consentForm.querySelectorAll('input[type="text"], input[type="date"]').forEach((field) => {
     field.value = '';
   });
@@ -889,9 +1027,190 @@ menuTabs.forEach((tab) => {
 loginForm.addEventListener('submit', handleLogin);
 logoutButton.addEventListener('click', logout);
 
-loadStoredTemplate();
-renderTemplateOptions();
-loadPdfDesign();
-loadStoredLogo();
-renderSavedDocuments();
-setAuthenticated(sessionStorage.getItem(SESSION_KEY) === 'authenticated');
+async function loadRolesAndUsers() {
+  if (!hasPermission('users', true)) return;
+  const { data: roles } = await supabaseClient.from('app_roles').select('id, name').order('name');
+  newUserRole.innerHTML = (roles || []).map((role) => `<option value="${role.id}">${role.name}</option>`).join('');
+  const { data: profiles } = await supabaseClient
+    .from('app_profiles')
+    .select('id, email, role_id, app_roles(name)')
+    .order('created_at', { ascending: true });
+  usersList.innerHTML = (profiles || []).map((profile) => `
+    <div class="saved-item">
+      <strong>${escapeHtml(profile.email)}</strong>
+      <div class="user-management-row">
+        <select data-user-role="${profile.id}">
+          ${(roles || []).map((role) => `<option value="${role.id}" ${role.id === profile.role_id ? 'selected' : ''}>${escapeHtml(role.name)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn btn-secondary" data-user-action="role" data-user-id="${profile.id}">Guardar rol</button>
+        <button type="button" class="btn btn-outline" data-user-action="delete" data-user-id="${profile.id}">${profile.id === currentUser?.id ? 'No revocar' : 'Revocar acceso'}</button>
+      </div>
+    </div>
+  `).join('') || '<div class="empty-state">No hay usuarios registrados.</div>';
+
+  const { data: roleRows } = await supabaseClient
+    .from('app_roles')
+    .select('id, name, description, app_role_permissions(permission_key, can_edit)')
+    .order('name');
+  rolesList.innerHTML = (roleRows || []).map((role) => {
+    const activePermissions = (role.app_role_permissions || []).map((permission) => permission.permission_key).join(', ');
+    return `
+      <div class="saved-item">
+        <strong>${escapeHtml(role.name)}</strong>
+        <small>${escapeHtml(role.description || 'Sin descripción')}<br />Permisos: ${escapeHtml(activePermissions || 'Ninguno')}</small>
+        <div class="saved-actions">
+          <button type="button" data-role-action="edit" data-role-id="${role.id}">Editar</button>
+          <button type="button" data-role-action="delete" data-role-id="${role.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
+  }).join('') || '<div class="empty-state">No hay roles registrados.</div>';
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[character]));
+}
+
+function resetRoleForm() {
+  roleForm.reset();
+  editingRoleId.value = '';
+  cancelRoleEditButton.classList.add('hidden-view');
+}
+
+function setRoleForm(role) {
+  editingRoleId.value = role.id;
+  roleNameInput.value = role.name;
+  roleDescriptionInput.value = role.description || '';
+  document.querySelectorAll('[data-role-permission]').forEach((input) => {
+    input.checked = (role.app_role_permissions || []).some((item) => item.permission_key === input.dataset.rolePermission);
+  });
+  document.querySelectorAll('[data-role-edit]').forEach((input) => {
+    input.checked = (role.app_role_permissions || []).some((item) => item.permission_key === input.dataset.roleEdit && item.can_edit);
+  });
+  cancelRoleEditButton.classList.remove('hidden-view');
+  roleNameInput.focus();
+}
+
+async function saveRole(event) {
+  event.preventDefault();
+  if (!requirePermission('users', true)) return;
+  const name = roleNameInput.value.trim();
+  const description = roleDescriptionInput.value.trim();
+  const roleId = editingRoleId.value;
+  if (!name) return;
+
+  let savedRoleId = roleId;
+  const rolePayload = { name, description };
+  const roleResult = roleId
+    ? await supabaseClient.from('app_roles').update(rolePayload).eq('id', roleId).select('id').single()
+    : await supabaseClient.from('app_roles').insert(rolePayload).select('id').single();
+  if (roleResult.error) {
+    userManagementMessage.textContent = `No se pudo guardar el rol: ${roleResult.error.message}`;
+    return;
+  }
+  savedRoleId = roleResult.data.id;
+
+  const selectedPermissions = [...document.querySelectorAll('[data-role-permission]:checked')].map((input) => ({
+    role_id: savedRoleId,
+    permission_key: input.dataset.rolePermission,
+    can_edit: Boolean(document.querySelector(`[data-role-edit="${input.dataset.rolePermission}"]`)?.checked)
+  }));
+  const { error: deletePermissionsError } = await supabaseClient
+    .from('app_role_permissions').delete().eq('role_id', savedRoleId);
+  if (deletePermissionsError) {
+    userManagementMessage.textContent = `No se pudieron actualizar los permisos: ${deletePermissionsError.message}`;
+    return;
+  }
+  if (selectedPermissions.length) {
+    const { error: permissionError } = await supabaseClient.from('app_role_permissions').insert(selectedPermissions);
+    if (permissionError) {
+      userManagementMessage.textContent = `No se pudieron guardar los permisos: ${permissionError.message}`;
+      return;
+    }
+  }
+  userManagementMessage.textContent = 'Rol y permisos guardados correctamente.';
+  resetRoleForm();
+  await loadRolesAndUsers();
+}
+
+async function handleUserAction(event) {
+  const button = event.target.closest('button[data-user-action]');
+  if (!button || !requirePermission('users', true)) return;
+  const userId = button.dataset.userId;
+  if (button.dataset.userAction === 'role') {
+    const roleId = usersList.querySelector(`[data-user-role="${userId}"]`).value;
+    const { error } = await supabaseClient.from('app_profiles').update({ role_id: roleId }).eq('id', userId);
+    userManagementMessage.textContent = error ? `No se pudo actualizar el rol: ${error.message}` : 'Rol del usuario actualizado.';
+  }
+  if (button.dataset.userAction === 'delete' && userId !== currentUser?.id) {
+    if (!window.confirm('¿Desea revocar el acceso de este usuario?')) return;
+    const { error } = await supabaseClient.from('app_profiles').delete().eq('id', userId);
+    userManagementMessage.textContent = error ? `No se pudo revocar el acceso: ${error.message}` : 'Acceso del usuario revocado.';
+  }
+  await loadRolesAndUsers();
+}
+
+async function handleRoleAction(event) {
+  const button = event.target.closest('button[data-role-action]');
+  if (!button || !requirePermission('users', true)) return;
+  const roleId = button.dataset.roleId;
+  const { data: role, error } = await supabaseClient.from('app_roles').select('id, name, description, app_role_permissions(permission_key, can_edit)').eq('id', roleId).single();
+  if (error) {
+    userManagementMessage.textContent = `No se pudo cargar el rol: ${error.message}`;
+    return;
+  }
+  if (button.dataset.roleAction === 'edit') {
+    setRoleForm(role);
+    return;
+  }
+  if (!window.confirm(`¿Desea eliminar el rol "${role.name}"? Los usuarios asignados deben tener otro rol.`)) return;
+  const { error: deleteError } = await supabaseClient.from('app_roles').delete().eq('id', roleId);
+  userManagementMessage.textContent = deleteError ? `No se pudo eliminar el rol: ${deleteError.message}` : 'Rol eliminado.';
+  await loadRolesAndUsers();
+}
+
+createUserForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!requirePermission('users', true)) return;
+  userManagementMessage.textContent = '';
+  const { data, error } = await supabaseClient.auth.signUp({
+    email: newUserEmail.value.trim().toLowerCase(),
+    password: newUserPassword.value
+  });
+  if (error || !data.user) {
+    userManagementMessage.textContent = error?.message || 'No se pudo crear el usuario.';
+    return;
+  }
+  const { error: profileError } = await supabaseClient.from('app_profiles').upsert({
+    id: data.user.id,
+    email: newUserEmail.value.trim().toLowerCase(),
+    role_id: newUserRole.value
+  });
+  if (profileError) {
+    userManagementMessage.textContent = `Usuario creado, pero no se pudo asignar el rol: ${profileError.message}`;
+    return;
+  }
+  createUserForm.reset();
+  userManagementMessage.textContent = 'Usuario creado y rol asignado correctamente.';
+  await loadRolesAndUsers();
+});
+
+roleForm.addEventListener('submit', saveRole);
+cancelRoleEditButton.addEventListener('click', resetRoleForm);
+usersList.addEventListener('click', handleUserAction);
+rolesList.addEventListener('click', handleRoleAction);
+
+async function bootstrap() {
+  loadStoredTemplate();
+  renderTemplateOptions();
+  loadPdfDesign();
+  loadStoredLogo();
+  renderSavedDocuments();
+  const { data } = await supabaseClient.auth.getSession();
+  if (data.session) await initializeAccess(data.session);
+  else setAuthenticated(false);
+}
+
+bootstrap();
