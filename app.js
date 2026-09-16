@@ -1121,8 +1121,9 @@ function triggerDownload(pdfDataUrl, fileName) {
 }
 
 function switchView(viewName) {
-  if (!hasPermission(viewName)) {
-    const firstAllowed = Object.keys(viewPanels).find((key) => hasPermission(key));
+  const requiredPermission = viewName === 'attendance' ? 'fill' : viewName;
+  if (!hasPermission(requiredPermission)) {
+    const firstAllowed = Object.keys(viewPanels).find((key) => hasPermission(key === 'attendance' ? 'fill' : key));
     if (firstAllowed && firstAllowed !== viewName) return switchView(firstAllowed);
     return;
   }
