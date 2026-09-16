@@ -14,16 +14,6 @@ create table if not exists public.signed_forms (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.attendance_lists (
-  id uuid primary key default gen_random_uuid(),
-  activity_title text not null,
-  activity_date date not null,
-  place text not null,
-  file_name text not null,
-  pdf_data text not null,
-  created_at timestamptz not null default now()
-);
-
 create table if not exists public.app_settings (
   key text primary key,
   value text not null,
@@ -80,7 +70,6 @@ on conflict (role_id, permission_key) do update set can_edit = excluded.can_edit
 
 alter table public.form_templates enable row level security;
 alter table public.signed_forms enable row level security;
-alter table public.attendance_lists enable row level security;
 alter table public.app_settings enable row level security;
 alter table public.app_roles enable row level security;
 alter table public.app_role_permissions enable row level security;
@@ -201,13 +190,4 @@ create policy "Authenticated setting reads" on public.app_settings for select to
 create policy "Editors write settings" on public.app_settings for all to authenticated
   using (public.has_app_permission('edit', true)) with check (public.has_app_permission('edit', true));
 
-drop policy if exists "Attendance readers" on public.attendance_lists;
-create policy "Attendance readers" on public.attendance_lists for select to authenticated
-  using (public.has_app_permission('fill') or public.has_app_permission('consult'));
-drop policy if exists "Attendance creators" on public.attendance_lists;
-create policy "Attendance creators" on public.attendance_lists for insert to authenticated
-  with check (public.has_app_permission('fill', true));
-drop policy if exists "Attendance deleters" on public.attendance_lists;
-create policy "Attendance deleters" on public.attendance_lists for delete to authenticated
-  using (public.has_app_permission('consult', true));
 

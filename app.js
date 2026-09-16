@@ -16,17 +16,6 @@ const roleNameInput = document.getElementById('roleName');
 const roleDescriptionInput = document.getElementById('roleDescription');
 const rolesList = document.getElementById('rolesList');
 const cancelRoleEditButton = document.getElementById('cancelRoleEditBtn');
-const attendanceForm = document.getElementById('attendanceForm');
-const attendanceTitleInput = document.getElementById('attendanceTitle');
-const attendanceDateInput = document.getElementById('attendanceDate');
-const attendancePlaceInput = document.getElementById('attendancePlace');
-const attendanceRowsContainer = document.getElementById('attendanceRows');
-const addAttendanceRowButton = document.getElementById('addAttendanceRowBtn');
-const clearAttendanceButton = document.getElementById('clearAttendanceBtn');
-const savedAttendanceContainer = document.getElementById('savedAttendance');
-const attendanceCount = document.getElementById('attendanceCount');
-const attendanceLogoPreview = document.getElementById('attendanceLogoPreview');
-const attendanceSignaturePads = new Map();
 
 let currentUser = null;
 let permissions = {};
@@ -86,8 +75,7 @@ const viewPanels = {
   edit: document.getElementById('editView'),
   fill: document.getElementById('fillView'),
   consult: document.getElementById('consultView'),
-  users: document.getElementById('usersView'),
-  attendance: document.getElementById('attendanceView')
+  users: document.getElementById('usersView')
 };
 
 const STORAGE_KEY = 'signedConsentForms';
@@ -575,176 +563,6 @@ function drawPdfCell(pdf, text, x, y, width, height, options = {}) {
   });
 }
 
-function addAttendanceRow(values = {}) {
-  const rowId = `attendance-${Date.now()}-${attendanceRowsContainer.children.length}`;
-  const row = document.createElement('div');
-  row.className = 'attendance-row';
-  row.dataset.rowId = rowId;
-  row.innerHTML = `
-    <input type="text" data-attendance-field="name" placeholder="Nombre completo" value="${escapeHtml(values.name || '')}" required />
-    <input type="text" data-attendance-field="document" placeholder="Documento" value="${escapeHtml(values.document || '')}" required />
-    <input type="text" data-attendance-field="phone" placeholder="Teléfono" value="${escapeHtml(values.phone || '')}" />
-    <div class="attendance-signature-box"><canvas data-attendance-signature width="240" height="70" aria-label="Firma del asistente"></canvas></div>
-    <button type="button" class="btn btn-outline remove-attendance-row" aria-label="Eliminar asistente">Eliminar</button>
-  `;
-  attendanceRowsContainer.appendChild(row);
-  const canvas = row.querySelector('[data-attendance-signature]');
-  attendanceSignaturePads.set(rowId, new SignaturePad(canvas, { minWidth: 0.8, maxWidth: 1.8, penColor: '#101827', backgroundColor: '#ffffff' }));
-  row.querySelector('.remove-attendance-row').addEventListener('click', () => {
-    attendanceSignaturePads.get(rowId)?.off();
-    attendanceSignaturePads.delete(rowId);
-    row.remove();
-  });
-}
-
-function clearAttendanceForm() {
-  attendanceForm.reset();
-  attendanceRowsContainer.innerHTML = '';
-  attendanceSignaturePads.clear();
-  addAttendanceRow();
-}
-
-function getAttendanceRows() {
-  return [...attendanceRowsContainer.querySelectorAll('.attendance-row')].map((row) => ({
-    name: row.querySelector('[data-attendance-field="name"]').value.trim(),
-    document: row.querySelector('[data-attendance-field="document"]').value.trim(),
-    phone: row.querySelector('[data-attendance-field="phone"]').value.trim(),
-    signature: attendanceSignaturePads.get(row.dataset.rowId)?.isEmpty() ? '' : attendanceSignaturePads.get(row.dataset.rowId).toDataURL('image/png')
-  }));
-}
-
-function buildAttendancePdf() {
-  const title = attendanceTitleInput.value.trim();
-  const date = formatDate(attendanceDateInput.value);
-  const place = attendancePlaceInput.value.trim();
-  const rows = getAttendanceRows();
-  const design = getPdfDesign();
-  const logoData = localStorage.getItem(LOGO_KEY);
-  const pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
-  const pageWidth = 215.9;
-  const pageHeight = 279.4;
-  const tableX = 14;
-  const tableWidth = 188;
-  const columns = [10, 72, 30, 30, 46];
-  let y = 38;
-
-  const drawHeader = () => {
-    pdf.setFillColor(design.primaryColor);
-    pdf.triangle(0, 0, 24, 0, 16, 8, 'F');
-    pdf.setFillColor(design.accentColor);
-    pdf.triangle(34, 0, 92, 0, 82, 8, 'F');
-    if (logoData) {
-      try { pdf.addImage(logoData, imageFormatFromDataUrl(logoData), 189 - design.logoWidth, 8, design.logoWidth, 17, undefined, 'FAST'); } catch (error) { console.warn('No se pudo cargar el logo', error); }
-    }
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.setTextColor(design.titleColor);
-    pdf.text('LISTA DE ASISTENCIA', pageWidth / 2, 29, { align: 'center' });
-  };
-
-  drawHeader();
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(8);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(`Actividad: ${title}`, tableX, y);
-  pdf.text(`Fecha: ${date}`, tableX, y + 5);
-  pdf.text(`Lugar: ${place}`, tableX + 100, y + 5);
-  y += 12;
-
-  const headings = ['No.', 'Nombre completo', 'Documento', 'Teléfono', 'Firma'];
-  const headerHeight = 8;
-  let x = tableX;
-  headings.forEach((heading, index) => {
-    drawPdfCell(pdf, heading, x, y, columns[index], headerHeight, { bold: true, align: 'center', fontSize: 7 });
-    x += columns[index];
-  });
-  y += headerHeight;
-
-  rows.forEach((row, index) => {
-    if (y > pageHeight - 35) {
-      pdf.addPage();
-      drawHeader();
-      y = 38;
-    }
-    const rowHeight = 18;
-    x = tableX;
-    drawPdfCell(pdf, String(index + 1), x, y, columns[0], rowHeight, { align: 'center', fontSize: 7 }); x += columns[0];
-    drawPdfCell(pdf, row.name, x, y, columns[1], rowHeight, { fontSize: 7 }); x += columns[1];
-    drawPdfCell(pdf, row.document, x, y, columns[2], rowHeight, { fontSize: 7 }); x += columns[2];
-    drawPdfCell(pdf, row.phone, x, y, columns[3], rowHeight, { fontSize: 7 }); x += columns[3];
-    drawPdfCell(pdf, '', x, y, columns[4], rowHeight);
-    if (row.signature) {
-      try { pdf.addImage(row.signature, 'PNG', x + 2, y + 3, columns[4] - 4, 12, undefined, 'FAST'); } catch (error) { console.warn('No se pudo cargar una firma', error); }
-    }
-    y += rowHeight;
-  });
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(6.3);
-  pdf.text(design.footerText, 16, pageHeight - 17);
-  pdf.text('Sector 3, Cra. 46 No. 40B - 50  NIT: 890984746 - 7', 16, pageHeight - 13);
-  pdf.text('Rionegro - Antioquia - Colombia', 16, pageHeight - 9);
-  pdf.text('www.uco.edu.co   @uconiano   Universidad Católica de Oriente', 16, pageHeight - 5);
-  return { pdf, fileName: `asistencia-${title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'actividad'}-${attendanceDateInput.value || new Date().toISOString().slice(0, 10)}.pdf` };
-}
-
-async function saveAttendanceList() {
-  if (!requirePermission('fill', true)) return;
-  if (!attendanceForm.reportValidity()) return;
-  const rows = getAttendanceRows();
-  if (!rows.length || rows.some((row) => !row.name || !row.document || !row.signature)) {
-    alert('Cada asistente debe tener nombre, documento y firma.');
-    return;
-  }
-  const { pdf, fileName } = buildAttendancePdf();
-  const pdfBlob = pdf.output('blob');
-  const reader = new FileReader();
-  reader.onloadend = async () => {
-    const { error } = await supabaseClient.from('attendance_lists').insert({
-      activity_title: attendanceTitleInput.value.trim(),
-      activity_date: attendanceDateInput.value,
-      place: attendancePlaceInput.value.trim(),
-      file_name: fileName,
-      pdf_data: reader.result
-    });
-    if (error) {
-      alert(`No se pudo guardar la lista: ${error.message}`);
-      return;
-    }
-    alert('La lista de asistencia se guardó correctamente en PDF.');
-    await renderSavedAttendance();
-  };
-  reader.readAsDataURL(pdfBlob);
-}
-
-async function renderSavedAttendance() {
-  const { data, error } = await supabaseClient.from('attendance_lists').select('*').order('created_at', { ascending: false });
-  if (error) {
-    savedAttendanceContainer.innerHTML = '<div class="empty-state">No se pudieron cargar las listas guardadas.</div>';
-    return;
-  }
-  attendanceCount.textContent = String(data?.length || 0);
-  savedAttendanceContainer.innerHTML = (data || []).map((item) => `
-    <div class="saved-item" data-attendance-id="${item.id}">
-      <strong>${escapeHtml(item.activity_title)}</strong>
-      <small>${formatDate(item.activity_date)} · ${escapeHtml(item.place)}</small>
-      <div class="saved-actions"><button type="button" data-attendance-action="download" data-attendance-id="${item.id}">Descargar</button><button type="button" data-attendance-action="delete" data-attendance-id="${item.id}">Eliminar</button></div>
-    </div>
-  `).join('') || '<div class="empty-state">Todavía no hay listas guardadas.</div>';
-}
-
-async function handleAttendanceAction(event) {
-  const button = event.target.closest('button[data-attendance-action]');
-  if (!button) return;
-  const { data: item } = await supabaseClient.from('attendance_lists').select('*').eq('id', button.dataset.attendanceId).single();
-  if (!item) return;
-  if (button.dataset.attendanceAction === 'download') triggerDownload(item.pdf_data, item.file_name);
-  if (button.dataset.attendanceAction === 'delete' && requirePermission('consult', true) && window.confirm(`¿Desea eliminar la lista "${item.activity_title}"?`)) {
-    await supabaseClient.from('attendance_lists').delete().eq('id', item.id);
-    await renderSavedAttendance();
-  }
-}
-
 function buildPdfDocument() {
   const data = getFormValues();
   const patientName = data.nombrePaciente || 'Paciente';
@@ -887,13 +705,11 @@ function updateLogoPreview(dataUrl) {
   if (!dataUrl) {
     logoPreview.src = '';
     fillLogoPreview.src = '';
-    attendanceLogoPreview.src = '';
     return;
   }
 
   logoPreview.src = dataUrl;
   fillLogoPreview.src = dataUrl;
-  attendanceLogoPreview.src = dataUrl;
 }
 
 async function loadStoredLogo() {
@@ -1121,9 +937,8 @@ function triggerDownload(pdfDataUrl, fileName) {
 }
 
 function switchView(viewName) {
-  const requiredPermission = viewName === 'attendance' ? 'fill' : viewName;
-  if (!hasPermission(requiredPermission)) {
-    const firstAllowed = Object.keys(viewPanels).find((key) => hasPermission(key === 'attendance' ? 'fill' : key));
+  if (!hasPermission(viewName)) {
+    const firstAllowed = Object.keys(viewPanels).find((key) => hasPermission(key));
     if (firstAllowed && firstAllowed !== viewName) return switchView(firstAllowed);
     return;
   }
@@ -1214,7 +1029,6 @@ clearFieldsButton.addEventListener('click', () => {
   });
 });
 savedDocumentsContainer.addEventListener('click', handleSavedActions);
-savedAttendanceContainer.addEventListener('click', handleAttendanceAction);
 applyTemplateBtn.addEventListener('click', applyTemplateChanges);
 saveTemplateButton.addEventListener('click', saveNamedTemplate);
 updateTemplateButton.addEventListener('click', updateSelectedTemplate);
@@ -1222,12 +1036,6 @@ templateSelect.addEventListener('change', () => loadNamedTemplate(templateSelect
 editTemplateSelect.addEventListener('change', () => loadNamedTemplate(editTemplateSelect.value));
 deleteTemplateButton.addEventListener('click', deleteSelectedTemplate);
 saveDesignButton.addEventListener('click', savePdfDesign);
-attendanceForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  saveAttendanceList();
-});
-addAttendanceRowButton.addEventListener('click', () => addAttendanceRow());
-clearAttendanceButton.addEventListener('click', clearAttendanceForm);
 menuTabs.forEach((tab) => {
   tab.addEventListener('click', () => switchView(tab.dataset.view));
 });
@@ -1446,8 +1254,6 @@ async function bootstrap() {
   loadPdfDesign();
   loadStoredLogo();
   renderSavedDocuments();
-  addAttendanceRow();
-  renderSavedAttendance();
   const { data } = await supabaseClient.auth.getSession();
   if (data.session) await initializeAccess(data.session);
   else setAuthenticated(false);

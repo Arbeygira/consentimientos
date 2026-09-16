@@ -36,7 +36,6 @@
       <nav class="main-menu" aria-label="Menú principal">
         <button type="button" class="menu-tab active" data-view="edit" data-permission="edit">Editar formulario</button>
         <button type="button" class="menu-tab" data-view="fill" data-permission="fill">Llenar formulario</button>
-        <button type="button" class="menu-tab" data-view="attendance" data-permission="fill">Lista de asistencia</button>
         <button type="button" class="menu-tab" data-view="consult" data-permission="consult">Consultar formularios</button>
         <button type="button" class="menu-tab" data-view="users" data-permission="users">Usuarios y roles</button>
         <button type="button" class="logout-button" id="logoutBtn">Cerrar sesión</button>
@@ -286,32 +285,6 @@
             <span class="count-badge" id="documentsCount">0</span>
           </div>
           <div id="savedDocuments" class="saved-documents"></div>
-        </aside>
-      </section>
-
-      <section id="attendanceView" class="view-panel hidden-view">
-        <div class="document-card attendance-card">
-          <header class="doc-header">
-            <img id="attendanceLogoPreview" src="" alt="Logo institucional" />
-          </header>
-          <h1>LISTA DE ASISTENCIA</h1>
-          <form id="attendanceForm">
-            <div class="attendance-meta">
-              <label>Título de la actividad<input type="text" id="attendanceTitle" required placeholder="Ej. Jornada de promoción y prevención" /></label>
-              <label>Fecha<input type="date" id="attendanceDate" required /></label>
-              <label>Lugar<input type="text" id="attendancePlace" required /></label>
-            </div>
-            <div id="attendanceRows" class="attendance-rows"></div>
-            <div class="action-row">
-              <button type="button" class="btn btn-outline" id="addAttendanceRowBtn">Agregar asistente</button>
-              <button type="button" class="btn btn-outline" id="clearAttendanceBtn">Limpiar lista</button>
-              <button type="submit" class="btn btn-primary">Guardar lista en PDF</button>
-            </div>
-          </form>
-        </div>
-        <aside class="sidebar-card attendance-saved-card">
-          <div class="sidebar-header"><span>Listas de asistencia guardadas</span><span class="count-badge" id="attendanceCount">0</span></div>
-          <div id="savedAttendance" class="saved-documents"></div>
         </aside>
       </section>
 

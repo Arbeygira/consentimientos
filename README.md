@@ -34,7 +34,6 @@ where email = 'admin@ejemplo.com';
 ```
 - En **Usuarios y roles** un administrador puede cambiar el rol de un usuario, revocar su acceso, crear o editar roles y definir sus permisos. Al eliminar un rol, primero reasigne los usuarios que lo utilizan.
 - La opción **Revocar acceso** elimina el perfil de la aplicación, por lo que el usuario ya no puede ingresar. La eliminación física de la cuenta de `auth.users` debe realizarse desde el panel de usuarios de Supabase.
-- La aplicación incluye **Lista de asistencia**, con título de actividad, fecha, lugar, datos de cada asistente y firma manuscrita. El PDF usa el logo, colores, tamaño de texto y pie configurados para el consentimiento. Ejecute nuevamente `supabase-schema.sql` para crear la tabla `attendance_lists`.
 
 ## Publicar en GitHub Pages
 
